@@ -24,8 +24,14 @@ References:
 var fs = require('fs');
 var program = require('commander');
 var cheerio = require('cheerio');
+// Adding restler to get the url and its contents.
+var util = require('util');
+var rest = require('restler');
+
 var HTMLFILE_DEFAULT = "index.html";
 var CHECKSFILE_DEFAULT = "checks.json";
+var URL_DEFAULT = "http://boiling-cove-3955.herokuapp.com";
+var URLFILE_DEFAULT = "urlIndex.html";
 
 var assertFileExists = function(infile) {
     var instr = infile.toString();
@@ -55,14 +61,52 @@ var checkHtmlFile = function(htmlfile, checksfile) {
     return out;
 };
 
+var checkURL = function(result, checksfile){
+    $ = cheerio.load(result);
+    var checks = loadChecks(checksfile).sort();
+        var out = {};
+        for(var ii in checks) {
+	            var present = $(checks[ii]).length > 0;
+	            out[checks[ii]] = present;
+	        }
+    return out;  
+}
+
 if(require.main == module) {
     program
-        .option('-c, --checks ', 'Path to checks.json', assertFileExists, CHECKSFILE_DEFAULT)
-        .option('-f, --file ', 'Path to index.html', assertFileExists, HTMLFILE_DEFAULT)
+    // The original grader.js code had a bug which would always use the default options
+    // using <> or [] in the option makes it either a required or optional argument respectively
+    
+        .option('-c, --checks <check_file>', 'Path to checks.json', assertFileExists, CHECKSFILE_DEFAULT)
+        .option('-f, --file <html_file>', 'Path to index.html', assertFileExists, HTMLFILE_DEFAULT)
+        .option('-u, --url [URL]', 
+		'URL of the Optional BitStarter site (will default to http://boiling-cove-3955.herokuapp.com)',
+		 URL_DEFAULT)
         .parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
+    var outJson = JSON.stringify("Insufficient arguments!", null, 4);
+    if(program.url && program.checks){
+	rest.get(program.url).on('complete', function(result){
+	    if(result instanceof Error){
+		console.error('Error: ' + util.format(result.message));
+		} else {
+		    //console.log(result);
+		    var checkJson = checkURL(result,program.checks);
+		    outJson = JSON.stringify(checkJson, null, 4); 
+		    console.log(outJson);
+		}    
+	    });
+	//var checkJson = rest.get(program.url).on('complete', function(result){checkURL(result,program.checks)});
+	//outJson = JSON.stringify(checkJson, null, 4);      
+	//console.log(outJson);	 
+    }
+    else if(program.file && program.checks){
+	var checkJson = checkHtmlFile(program.file, program.checks);
+	outJson = JSON.stringify(checkJson, null, 4);      
+	console.log(outJson);
+    }
+    else
+	console.log(outJson);
+    
 } else {
     exports.checkHtmlFile = checkHtmlFile;
 }
